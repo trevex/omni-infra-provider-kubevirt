@@ -33,17 +33,28 @@ import (
 
 // Provisioner implements Talos emulator infra provider.
 type Provisioner struct {
-	k8sClient  client.Client
-	namespace  string
-	volumeMode v1.PersistentVolumeMode
+	k8sClient        client.Client
+	namespace        string
+	volumeMode       v1.PersistentVolumeMode
+	networkInterface kvv1.Interface
 }
 
 // NewProvisioner creates a new provisioner.
-func NewProvisioner(k8sClient client.Client, namespace, volumeMode string) *Provisioner {
+func NewProvisioner(k8sClient client.Client, namespace, volumeMode, networkBinding string) *Provisioner {
+	networkInterface := *kvv1.DefaultBridgeNetworkInterface()
+	if networkBinding == "passt" {
+		networkInterface = kvv1.Interface{
+			Name: networkInterface.Name,
+			Binding: &kvv1.PluginBinding{
+				Name: "passt",
+			},
+		}
+	}
 	return &Provisioner{
-		k8sClient:  k8sClient,
-		namespace:  namespace,
-		volumeMode: v1.PersistentVolumeMode(volumeMode),
+		k8sClient:        k8sClient,
+		namespace:        namespace,
+		volumeMode:       v1.PersistentVolumeMode(volumeMode),
+		networkInterface: networkInterface,
 	}
 }
 
@@ -234,12 +245,7 @@ func (p *Provisioner) ProvisionSteps() []provision.Step[*resources.Machine] {
 					},
 				},
 				Interfaces: []kvv1.Interface{
-					{
-						Name: kvv1.DefaultPodNetwork().Name,
-						Binding: &kvv1.PluginBinding{
-							Name: "passt",
-						},
-					},
+					p.networkInterface,
 				},
 			}
 
