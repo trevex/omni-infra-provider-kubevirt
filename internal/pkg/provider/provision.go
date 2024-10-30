@@ -229,6 +229,14 @@ func (p *Provisioner) ProvisionSteps() []provision.Step[*resources.Machine] {
 						},
 					},
 				},
+				Interfaces: []kvv1.Interface{
+					{
+						Name: "default",
+						Binding: &kvv1.PluginBinding{
+							Name: "passt",
+						},
+					},
+				},
 			}
 
 			vm.Spec.Template.Spec.Volumes = []kvv1.Volume{
