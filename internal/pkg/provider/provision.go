@@ -217,6 +217,10 @@ func (p *Provisioner) ProvisionSteps() []provision.Step[*resources.Machine] {
 
 			vm.Spec.Template.Spec.Domain.Resources.Requests[v1.ResourceMemory] = *resource.NewQuantity(int64(data.Memory)*1024*1024, resource.DecimalSI)
 
+			vm.Spec.Template.Spec.Networks = []kvv1.Network{
+				*kvv1.DefaultPodNetwork(),
+			}
+
 			vm.Spec.Template.Spec.Domain.Devices = kvv1.Devices{
 				Disks: []kvv1.Disk{
 					{
@@ -231,7 +235,7 @@ func (p *Provisioner) ProvisionSteps() []provision.Step[*resources.Machine] {
 				},
 				Interfaces: []kvv1.Interface{
 					{
-						Name: "default",
+						Name: kvv1.DefaultPodNetwork().Name,
 						Binding: &kvv1.PluginBinding{
 							Name: "passt",
 						},
