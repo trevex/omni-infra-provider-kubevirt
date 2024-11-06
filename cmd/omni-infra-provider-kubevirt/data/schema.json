@@ -16,6 +16,10 @@
       "type": "integer",
       "minimum": 5,
       "description": "In GB"
+    },
+    "target_namespace": {
+      "type": "string",
+      "description": "Kubernetes namespace to provision in"
     }
   },
   "required": [

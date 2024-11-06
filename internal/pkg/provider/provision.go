@@ -34,13 +34,13 @@ import (
 // Provisioner implements Talos emulator infra provider.
 type Provisioner struct {
 	k8sClient        client.Client
-	namespace        string
+	defaultNamespace string
 	volumeMode       v1.PersistentVolumeMode
 	networkInterface kvv1.Interface
 }
 
 // NewProvisioner creates a new provisioner.
-func NewProvisioner(k8sClient client.Client, namespace, volumeMode, networkBinding string) *Provisioner {
+func NewProvisioner(k8sClient client.Client, defaultNamespace, volumeMode, networkBinding string) *Provisioner {
 	networkInterface := *kvv1.DefaultBridgeNetworkInterface()
 	if networkBinding == "passt" {
 		networkInterface = kvv1.Interface{
@@ -52,7 +52,7 @@ func NewProvisioner(k8sClient client.Client, namespace, volumeMode, networkBindi
 	}
 	return &Provisioner{
 		k8sClient:        k8sClient,
-		namespace:        namespace,
+		defaultNamespace: defaultNamespace,
 		volumeMode:       v1.PersistentVolumeMode(volumeMode),
 		networkInterface: networkInterface,
 	}
@@ -91,9 +91,7 @@ func (p *Provisioner) ProvisionSteps() []provision.Step[*resources.Machine] {
 				return err
 			}
 
-			var data Data
-
-			err = pctx.UnmarshalProviderData(&data)
+			data, err := p.GetProviderData(&pctx)
 			if err != nil {
 				return err
 			}
@@ -147,7 +145,7 @@ func (p *Provisioner) ProvisionSteps() []provision.Step[*resources.Machine] {
 			vol := &cdiv1.DataVolume{}
 
 			err = p.k8sClient.Get(ctx, client.ObjectKey{
-				Namespace: p.namespace,
+				Namespace: data.TargetNamespace,
 				Name:      volumeID,
 			}, vol)
 			if err != nil && !errors.IsNotFound(err) {
@@ -160,7 +158,7 @@ func (p *Provisioner) ProvisionSteps() []provision.Step[*resources.Machine] {
 
 			if vol.Name == "" {
 				volume.Name = volumeID
-				volume.Namespace = p.namespace
+				volume.Namespace = data.TargetNamespace
 
 				if err = p.k8sClient.Create(ctx, &volume); err != nil {
 					return err
@@ -170,6 +168,11 @@ func (p *Provisioner) ProvisionSteps() []provision.Step[*resources.Machine] {
 			return provision.NewRetryInterval(time.Second * 10)
 		}),
 		provision.NewStep("syncMachine", func(ctx context.Context, logger *zap.Logger, pctx provision.Context[*resources.Machine]) error {
+			data, err := p.GetProviderData(&pctx)
+			if err != nil {
+				return err
+			}
+
 			if pctx.State.TypedSpec().Value.Uuid == "" {
 				pctx.State.TypedSpec().Value.Uuid = uuid.NewString()
 			}
@@ -182,8 +185,8 @@ func (p *Provisioner) ProvisionSteps() []provision.Step[*resources.Machine] {
 
 			vm := &kvv1.VirtualMachine{}
 
-			err := p.k8sClient.Get(ctx, client.ObjectKey{
-				Namespace: p.namespace,
+			err = p.k8sClient.Get(ctx, client.ObjectKey{
+				Namespace: data.TargetNamespace,
 				Name:      pctx.GetRequestID(),
 			}, vm)
 			if err != nil && !errors.IsNotFound(err) {
@@ -194,13 +197,6 @@ func (p *Provisioner) ProvisionSteps() []provision.Step[*resources.Machine] {
 				logger.Info("machine is ready")
 
 				return nil
-			}
-
-			var data Data
-
-			err = pctx.UnmarshalProviderData(&data)
-			if err != nil {
-				return err
 			}
 
 			vm.Spec.Running = pointer.To(true)
@@ -215,6 +211,10 @@ func (p *Provisioner) ProvisionSteps() []provision.Step[*resources.Machine] {
 						},
 					},
 				}
+			}
+
+			vm.Spec.Template.ObjectMeta = metav1.ObjectMeta{
+				Labels: pctx.State.Metadata().Labels().Raw(),
 			}
 
 			vm.Spec.Template.Spec.Domain.Firmware = &kvv1.Firmware{
@@ -287,7 +287,7 @@ func (p *Provisioner) ProvisionSteps() []provision.Step[*resources.Machine] {
 					Source: &cdiv1.DataVolumeSource{
 						PVC: &cdiv1.DataVolumeSourcePVC{
 							Name:      pctx.State.TypedSpec().Value.VolumeId,
-							Namespace: p.namespace,
+							Namespace: data.TargetNamespace,
 						},
 					},
 				},
@@ -303,7 +303,7 @@ func (p *Provisioner) ProvisionSteps() []provision.Step[*resources.Machine] {
 
 			if vm.Name == "" {
 				vm.Name = pctx.GetRequestID()
-				vm.Namespace = p.namespace
+				vm.Namespace = data.TargetNamespace
 
 				if err = p.k8sClient.Create(ctx, vm); err != nil {
 					return err
@@ -320,11 +320,18 @@ func (p *Provisioner) ProvisionSteps() []provision.Step[*resources.Machine] {
 }
 
 // Deprovision implements infra.Provisioner.
-func (p *Provisioner) Deprovision(ctx context.Context, logger *zap.Logger, _ *resources.Machine, machineRequest *infra.MachineRequest) error {
+func (p *Provisioner) Deprovision(ctx context.Context, logger *zap.Logger, machine *resources.Machine, machineRequest *infra.MachineRequest) error {
 	var vm kvv1.VirtualMachine
 
-	err := p.k8sClient.Get(ctx, client.ObjectKey{
-		Namespace: p.namespace,
+	// We manually create a context to be able to use UnmarshalProviderData helper function
+	pctx := provision.NewContext(machineRequest, nil, machine, provision.ConnectionParams{}, nil)
+	data, err := p.GetProviderData(&pctx)
+	if err != nil {
+		return err
+	}
+
+	err = p.k8sClient.Get(ctx, client.ObjectKey{
+		Namespace: data.TargetNamespace,
 		Name:      machineRequest.Metadata().ID(),
 	}, &vm)
 	if err != nil && !errors.IsNotFound(err) {
@@ -340,7 +347,7 @@ func (p *Provisioner) Deprovision(ctx context.Context, logger *zap.Logger, _ *re
 	err = p.k8sClient.Delete(ctx, &kvv1.VirtualMachine{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      machineRequest.Metadata().ID(),
-			Namespace: p.namespace,
+			Namespace: data.TargetNamespace,
 		},
 	})
 	if err != nil && !errors.IsNotFound(err) {
@@ -348,4 +355,20 @@ func (p *Provisioner) Deprovision(ctx context.Context, logger *zap.Logger, _ *re
 	}
 
 	return provision.NewRetryInterval(time.Second * 5)
+}
+
+// Unmarshal provider data and set defaults for optional fields.
+func (p *Provisioner) GetProviderData(pctx *provision.Context[*resources.Machine]) (*Data, error) {
+	var data Data
+
+	err := pctx.UnmarshalProviderData(&data)
+	if err != nil {
+		return nil, err
+	}
+
+	if data.TargetNamespace == "" {
+		data.TargetNamespace = p.defaultNamespace
+	}
+
+	return &data, nil
 }

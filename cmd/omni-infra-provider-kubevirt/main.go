@@ -90,7 +90,7 @@ var rootCmd = &cobra.Command{
 			return fmt.Errorf("data-volume-mode flags should be one of %s", volumeOpts)
 		}
 
-		provisioner := provider.NewProvisioner(k8sClient, cfg.namespace, cfg.dataVolumeMode, cfg.networkBinding)
+		provisioner := provider.NewProvisioner(k8sClient, cfg.defaultNamespace, cfg.dataVolumeMode, cfg.networkBinding)
 
 		ip, err := infra.NewProvider(meta.ProviderID, provisioner, infra.ProviderConfig{
 			Name:        cfg.providerName,
@@ -124,7 +124,7 @@ var cfg struct {
 	providerName        string
 	providerDescription string
 	kubeconfigFile      string
-	namespace           string
+	defaultNamespace    string
 	dataVolumeMode      string
 	networkBinding      string
 	insecureSkipVerify  bool
@@ -151,7 +151,7 @@ func init() {
 	rootCmd.Flags().StringVar(&cfg.providerName, "provider-name", "KubeVirt", "provider name as it appears in Omni")
 	rootCmd.Flags().StringVar(&cfg.providerDescription, "provider-description", "KubeVirt infrastructure provider", "Provider description as it appears in Omni")
 	rootCmd.Flags().StringVar(&cfg.kubeconfigFile, "kubeconfig-file", "~/.kube/config", "Kubeconfig file to use to connect to the cluster where KubeVirt is running")
-	rootCmd.Flags().StringVar(&cfg.namespace, "namespace", "default", "Kubernetes namespace to use for the resources created by the provider")
+	rootCmd.Flags().StringVar(&cfg.defaultNamespace, "default-namespace", "default", "Kubernetes namespace to use for the resources created by the provider")
 	rootCmd.Flags().StringVar(&cfg.dataVolumeMode, "data-volume-mode", "", "DataVolume PVC type to use (Block|Filesystem)")
 	rootCmd.Flags().StringVar(&cfg.networkBinding, "kubevirt-network-binding", "bridge", "Which network binding to use for VM primary interface (bridge|passt)")
 	rootCmd.Flags().BoolVar(&cfg.insecureSkipVerify, "insecure-skip-verify", false, "ignores untrusted certs on Omni side")
