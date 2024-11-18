@@ -11,4 +11,5 @@ type Data struct {
 	DiskSize        int    `yaml:"disk_size"`
 	Memory          uint64 `yaml:"memory"`
 	TargetNamespace string `yaml:"target_namespace,omitempty"`
+	MacAddress      string `yaml:"mac_address,omitempty"`
 }

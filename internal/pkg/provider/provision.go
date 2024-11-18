@@ -232,6 +232,12 @@ func (p *Provisioner) ProvisionSteps() []provision.Step[*resources.Machine] {
 				*kvv1.DefaultPodNetwork(),
 			}
 
+			if data.MacAddress != "" {
+				p.networkInterface.MacAddress = data.MacAddress
+			} else {
+				p.networkInterface.MacAddress = ""
+			}
+
 			vm.Spec.Template.Spec.Domain.Devices = kvv1.Devices{
 				Disks: []kvv1.Disk{
 					{

@@ -20,6 +20,10 @@
     "target_namespace": {
       "type": "string",
       "description": "Kubernetes namespace to provision in"
+    },
+    "mac_address": {
+      "type": "string",
+      "default": ""
     }
   },
   "required": [
