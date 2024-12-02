@@ -40,7 +40,7 @@ type Provisioner struct {
 }
 
 // NewProvisioner creates a new provisioner.
-func NewProvisioner(k8sClient client.Client, defaultNamespace, volumeMode, networkBinding string) *Provisioner {
+func NewProvisioner(k8sClient client.Client, defaultNamespace, volumeMode, networkBinding, overrideMac string) *Provisioner {
 	networkInterface := *kvv1.DefaultBridgeNetworkInterface()
 	if networkBinding == "passt" {
 		networkInterface = kvv1.Interface{
@@ -50,6 +50,9 @@ func NewProvisioner(k8sClient client.Client, defaultNamespace, volumeMode, netwo
 			},
 		}
 	}
+
+	networkInterface.MacAddress = overrideMac
+
 	return &Provisioner{
 		k8sClient:        k8sClient,
 		defaultNamespace: defaultNamespace,
@@ -232,12 +235,6 @@ func (p *Provisioner) ProvisionSteps() []provision.Step[*resources.Machine] {
 				*kvv1.DefaultPodNetwork(),
 			}
 
-			if data.MacAddress != "" {
-				p.networkInterface.MacAddress = data.MacAddress
-			} else {
-				p.networkInterface.MacAddress = ""
-			}
-
 			vm.Spec.Template.Spec.Domain.Devices = kvv1.Devices{
 				Disks: []kvv1.Disk{
 					{
@@ -331,6 +328,7 @@ func (p *Provisioner) Deprovision(ctx context.Context, logger *zap.Logger, machi
 
 	// We manually create a context to be able to use UnmarshalProviderData helper function
 	pctx := provision.NewContext(machineRequest, nil, machine, provision.ConnectionParams{}, nil)
+
 	data, err := p.GetProviderData(&pctx)
 	if err != nil {
 		return err

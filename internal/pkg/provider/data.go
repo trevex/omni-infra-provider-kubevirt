@@ -7,9 +7,8 @@ package provider
 // Data is the provider custom machine config.
 type Data struct {
 	Architecture    string `yaml:"architecture"`
+	TargetNamespace string `yaml:"target_namespace,omitempty"`
 	Cores           int    `yaml:"cores"`
 	DiskSize        int    `yaml:"disk_size"`
 	Memory          uint64 `yaml:"memory"`
-	TargetNamespace string `yaml:"target_namespace,omitempty"`
-	MacAddress      string `yaml:"mac_address,omitempty"`
 }

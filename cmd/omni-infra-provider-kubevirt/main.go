@@ -90,7 +90,7 @@ var rootCmd = &cobra.Command{
 			return fmt.Errorf("data-volume-mode flags should be one of %s", volumeOpts)
 		}
 
-		provisioner := provider.NewProvisioner(k8sClient, cfg.defaultNamespace, cfg.dataVolumeMode, cfg.networkBinding)
+		provisioner := provider.NewProvisioner(k8sClient, cfg.defaultNamespace, cfg.dataVolumeMode, cfg.networkBinding, cfg.overrideMac)
 
 		ip, err := infra.NewProvider(meta.ProviderID, provisioner, infra.ProviderConfig{
 			Name:        cfg.providerName,
@@ -127,6 +127,7 @@ var cfg struct {
 	defaultNamespace    string
 	dataVolumeMode      string
 	networkBinding      string
+	overrideMac         string
 	insecureSkipVerify  bool
 }
 
@@ -155,4 +156,5 @@ func init() {
 	rootCmd.Flags().StringVar(&cfg.dataVolumeMode, "data-volume-mode", "", "DataVolume PVC type to use (Block|Filesystem)")
 	rootCmd.Flags().StringVar(&cfg.networkBinding, "kubevirt-network-binding", "bridge", "Which network binding to use for VM primary interface (bridge|passt)")
 	rootCmd.Flags().BoolVar(&cfg.insecureSkipVerify, "insecure-skip-verify", false, "ignores untrusted certs on Omni side")
+	rootCmd.Flags().StringVar(&cfg.overrideMac, "override-mac", "", "Whether to override VM's Mac-Address (defaults to \"\")")
 }
